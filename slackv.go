@@ -363,6 +363,8 @@ func onMessageMe(msg map[string]interface{}) {
 }
 
 func onMessageChanged(msg map[string]interface{}) {
+    var text string
+
     message, exist := msg["message"].(map[string]interface{})
     if ! exist {
         return
@@ -371,9 +373,44 @@ func onMessageChanged(msg map[string]interface{}) {
     channel := g_IdNameMap[msg["channel"].(string)]
     userType := getUserType(msg)
     user := g_IdNameMap[message["user"].(string)]
-    text := message["text"].(string)
+    text = message["text"].(string)
+    annotation := " \033[93m(edited)\033[0m"
+    toRemoveLastUser := false
 
-    printMessage(timestamp, channel, userType, user, text, " \033[93m(edited)\033[0m")
+    if attachments, exist := message["attachments"].([]interface{}); exist {
+        if attachment, exist := attachments[0].(map[string]interface{}); exist {
+            header := ""
+            if serviceName, exist := attachment["service_name"].(string); exist {
+                header = header + serviceName + ":"
+            }
+            if authorName, exist := attachment["author_name"].(string); exist {
+                header = header + authorName + " "
+            }
+            if title, exist := attachment["title"].(string); exist {
+                header = header + title + " "
+            }
+            if footer, exist := attachment["footer"].(string); exist {
+                header = header + " (" + footer + ") "
+            }
+            if len(header) > 0 {
+                header = "\033[44m" + strings.TrimSpace(header) + "\033[0m\n"
+            }
+            text, exist = attachment["text"].(string)
+            if textLen := len(text); textLen > 1000 {
+                text = text[:1000] + "..."
+            }
+            
+            text = header + text
+            annotation = ""
+            toRemoveLastUser = true
+        }
+    }
+
+    printMessage(timestamp, channel, userType, user, text, annotation)
+    
+    if toRemoveLastUser {
+        g_LastUser = ""
+    }
 }
 
 func getUserType(msg map[string]interface{}) string {
