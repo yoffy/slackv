@@ -3,7 +3,7 @@
 package console
 
 func Initialize() error {
-    return nil
+	return nil
 }
 
 func Finalize() {
