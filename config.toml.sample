@@ -1,3 +1,7 @@
 [general]
-# write legacy-token from https://api.slack.com/custom-integrations/legacy-tokens
-token = "0123456789"
+# fill legacy-token from https://api.slack.com/custom-integrations/legacy-tokens
+#token = "0123456789"
+
+[notification]
+# highlight the message when matching any regexp
+#patterns = ['@here', '@channel', "www.*\.com"]

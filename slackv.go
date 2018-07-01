@@ -24,10 +24,15 @@ import "slackv/console"
 
 type Config struct {
     General ConfigGeneral
+    Notification ConfigNotification
 }
 
 type ConfigGeneral struct {
     Token string
+}
+
+type ConfigNotification struct {
+    Patterns []string
 }
 
 //==============================
@@ -132,18 +137,19 @@ var g_LastChannel = ""
 var g_MentionPattern = regexp.MustCompile(`<@([^>|]+)(\|([^>]+))?>`)
 var g_ChannelPattern = regexp.MustCompile(`<#([^>|]+)(\|([^>]+))?>`)
 var g_KeywordPattern = regexp.MustCompile(`<!([^>|]+)(\|([^>]+))?>`)
+var g_NotificationPatterns []*regexp.Regexp
+
+var g_Config Config
 
 //==============================
 // entry point
 //==============================
 
 func main() {
-    var config Config
-
     console.Initialize()
     defer console.Finalize()
 
-    _, err := toml.DecodeFile("config.toml", &config)
+    err := loadConfig("config.toml")
     if err != nil {
         log.Fatal(err)
         return
@@ -154,7 +160,7 @@ func main() {
     for {
         fmt.Println("Connecting...")
 
-        ws, err := connect(config.General.Token)
+        ws, err := connect(g_Config.General.Token)
         if err != nil {
             goto L_Error
         }
@@ -177,6 +183,25 @@ L_Error:
             waitNS = 10 * time.Second
         }
     }
+}
+
+func loadConfig(path string) error {
+    _, err := toml.DecodeFile(path, &g_Config)
+    if err != nil {
+        return err
+    }
+
+    if g_Config.Notification.Patterns != nil {
+        for _, pattern := range g_Config.Notification.Patterns {
+            if regex, err := regexp.Compile(pattern); err != nil {
+                log.Print(err)
+            } else {
+                g_NotificationPatterns = append(g_NotificationPatterns, regex)
+            }
+        }
+    }
+
+    return nil
 }
 
 //! login to Slack and connect websocket
@@ -455,8 +480,13 @@ func printMessage(
         )
     }
 
+    text = unescape(text)
+    if containsAnyPatterns(text, g_NotificationPatterns) {
+        text = "\033[5;95m" + text + "\033[0m"
+    }
+
     // display body
-    fmt.Printf("%s%s\n", unescape(text), annotation)
+    fmt.Printf("%s%s\n", text, annotation)
 
     g_LastChannel = channel
     g_LastUser = user
@@ -464,7 +494,7 @@ func printMessage(
 
 func unescape(text string) string {
     text = g_ChannelPattern.ReplaceAllString(text, "#$3")
-    text = g_KeywordPattern.ReplaceAllString(text, "$3")
+    text = g_KeywordPattern.ReplaceAllString(text, "@$3")
 
     isMatching := true
     for isMatching {
@@ -475,6 +505,15 @@ func unescape(text string) string {
         }
     }
     return html.UnescapeString(text)
+}
+
+func containsAnyPatterns(text string, patterns []*regexp.Regexp) bool {
+    for _, pattern := range patterns {
+        if pattern.MatchString(text) {
+            return true
+        }
+    }
+    return false
 }
 
 //==============================
