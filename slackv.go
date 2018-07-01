@@ -31,7 +31,9 @@ type ConfigGeneral struct {
 }
 
 type ConfigNotification struct {
-	Patterns []string
+	Patterns     []string
+	MuteChannels []string `toml:"mute-channels"`
+	MuteUsers    []string `toml:"mute-users"`
 }
 
 //==============================
@@ -473,6 +475,13 @@ func printMessage(
 	text string,
 	annotation string,
 ) {
+	if equalsAnyKeywords(channel, g_Config.Notification.MuteChannels) {
+		return
+	}
+	if equalsAnyKeywords(user, g_Config.Notification.MuteUsers) {
+		return
+	}
+
 	if channel != g_LastChannel {
 		// insert a empty line and header
 		fmt.Printf(
@@ -492,7 +501,7 @@ func printMessage(
 	}
 
 	text = unescape(text)
-	if containsAnyPatterns(text, g_NotificationPatterns) {
+	if matchAnyPatterns(text, g_NotificationPatterns) {
 		text = "\033[5;95m" + text + "\033[0m"
 	}
 
@@ -518,9 +527,18 @@ func unescape(text string) string {
 	return html.UnescapeString(text)
 }
 
-func containsAnyPatterns(text string, patterns []*regexp.Regexp) bool {
+func matchAnyPatterns(text string, patterns []*regexp.Regexp) bool {
 	for _, pattern := range patterns {
 		if pattern.MatchString(text) {
+			return true
+		}
+	}
+	return false
+}
+
+func equalsAnyKeywords(text string, keywords []string) bool {
+	for _, keyword := range keywords {
+		if text == keyword {
 			return true
 		}
 	}

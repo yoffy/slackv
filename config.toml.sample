@@ -5,3 +5,5 @@
 [notification]
 # highlight the message when matching any regexp
 #patterns = ['@here', '@channel', "www.*\.com"]
+#mute-channels = ['random']
+#mute-users = ['slackbot']
