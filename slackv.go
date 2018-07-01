@@ -175,7 +175,7 @@ func main() {
         }
 
 L_Error:
-        log.Fatal(err)
+        log.Print(err)
         log.Printf("wait %d secs...\n", waitNS/time.Second)
         time.Sleep(waitNS)
         waitNS = waitNS * 2
