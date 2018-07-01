@@ -133,6 +133,7 @@ var g_IdNameMap map[string]string
 
 var g_LastUser = ""
 var g_LastChannel = ""
+var g_LastThreadTs = time.Unix(0, 0)
 
 var g_MentionPattern = regexp.MustCompile(`<@([^>|]+)(\|([^>]+))?>`)
 var g_ChannelPattern = regexp.MustCompile(`<#([^>|]+)(\|([^>]+))?>`)
@@ -379,12 +380,13 @@ func onMessage(msg map[string]interface{}) {
 
 func onPureMessage(msg map[string]interface{}) {
 	timestamp := getTimestamp(msg)
+	threadTs := getThreadTs(msg)
 	channel := g_IdNameMap[msg["channel"].(string)]
 	userType := getUserType(msg)
 	user := g_IdNameMap[msg["user"].(string)]
 	text := msg["text"].(string)
 
-	printMessage(timestamp, channel, userType, user, text, "")
+	printMessage(timestamp, threadTs, channel, userType, user, text, "")
 }
 
 func onMessageFileShare(msg map[string]interface{}) {
@@ -392,12 +394,13 @@ func onMessageFileShare(msg map[string]interface{}) {
 
 func onMessageMe(msg map[string]interface{}) {
 	timestamp := getTimestamp(msg)
+	threadTs := getThreadTs(msg)
 	channel := g_IdNameMap[msg["channel"].(string)]
 	userType := getUserType(msg)
 	user := g_IdNameMap[msg["user"].(string)]
 	text := "\033[3m\033[90m" + msg["text"].(string) + "\033[0m"
 
-	printMessage(timestamp, channel, userType, user, text, "")
+	printMessage(timestamp, threadTs, channel, userType, user, text, "")
 }
 
 func onMessageChanged(msg map[string]interface{}) {
@@ -408,6 +411,7 @@ func onMessageChanged(msg map[string]interface{}) {
 		return
 	}
 	timestamp := getTimestamp(message)
+	threadTs := getThreadTs(msg)
 	channel := g_IdNameMap[msg["channel"].(string)]
 	userType := getUserType(msg)
 	user := g_IdNameMap[message["user"].(string)]
@@ -444,7 +448,7 @@ func onMessageChanged(msg map[string]interface{}) {
 		}
 	}
 
-	printMessage(timestamp, channel, userType, user, text, annotation)
+	printMessage(timestamp, threadTs, channel, userType, user, text, annotation)
 
 	if toRemoveLastUser {
 		g_LastUser = ""
@@ -463,12 +467,24 @@ func getUserType(msg map[string]interface{}) string {
 }
 
 func getTimestamp(msg map[string]interface{}) time.Time {
-	ts, _ := strconv.ParseFloat(msg["ts"].(string), 64)
-	return time.Unix(int64(ts), 0)
+	fTs := 0.0
+	if strTs, exist := msg["ts"]; exist {
+		fTs, _ = strconv.ParseFloat(strTs.(string), 64)
+	}
+	return time.Unix(int64(fTs), 0)
+}
+
+func getThreadTs(msg map[string]interface{}) time.Time {
+	fTs := 0.0
+	if strTs, exist := msg["thread_ts"]; exist {
+		fTs, _ = strconv.ParseFloat(strTs.(string), 64)
+	}
+	return time.Unix(int64(fTs), 0)
 }
 
 func printMessage(
 	timestamp time.Time,
+	threadTs time.Time,
 	channel string,
 	userType string,
 	user string,
@@ -482,21 +498,26 @@ func printMessage(
 		return
 	}
 
+	strTimestamp := timestamp.Format("2006/01/02 15:04:05")
+	if threadTs.Unix() != 0 {
+		strTimestamp = strTimestamp + " [at " + threadTs.Format("2006/01/02 15:04:05") + "]"
+	}
+
 	if channel != g_LastChannel {
 		// insert a empty line and header
 		fmt.Printf(
 			"\n\033[93m@%-18s #%-20s %s\033[0m\n",
 			userType+user,
 			channel,
-			timestamp.Format("2006/01/02 15:04:05"),
+			strTimestamp,
 		)
-	} else if user != g_LastUser {
+	} else if user != g_LastUser || !threadTs.Equal(g_LastThreadTs) {
 		// display header
 		fmt.Printf(
 			"\033[93m@%-18s #%-20s %s\033[0m\n",
 			userType+user,
 			channel,
-			timestamp.Format("2006/01/02 15:04:05"),
+			strTimestamp,
 		)
 	}
 
@@ -510,6 +531,7 @@ func printMessage(
 
 	g_LastChannel = channel
 	g_LastUser = user
+	g_LastThreadTs = threadTs
 }
 
 func unescape(text string) string {
