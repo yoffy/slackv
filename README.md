@@ -4,7 +4,7 @@ Slack viewer
 
 Available to use for Linux, macOS and Windows.
 
-# how to build
+# How to build
 
 ```
 $ git clone https://github.com/yoffy/slackv.git
