@@ -156,11 +156,12 @@ func main() {
 		return
 	}
 
+	fmt.Println("Connecting...")
 	waitNS := 1 * time.Second
 
-	for {
-		fmt.Println("Connecting...")
+	var lastError error
 
+	for {
 		ws, err := connect(g_Config.General.Token)
 		if err != nil {
 			goto L_Error
@@ -168,6 +169,7 @@ func main() {
 		defer ws.Close()
 
 		waitNS = 1 * time.Second
+		lastError = nil
 
 		err = receiveRoutine(ws)
 		if err != nil {
@@ -176,12 +178,16 @@ func main() {
 		}
 
 	L_Error:
-		log.Print(err)
-		log.Printf("wait %d secs...\n", waitNS/time.Second)
+		if err != lastError {
+			log.Print(err)
+			log.Printf("Connecting...\n", waitNS/time.Second)
+			lastError = err
+		}
+
 		time.Sleep(waitNS)
 		waitNS = waitNS * 2
-		if waitNS > 10*time.Second {
-			waitNS = 10 * time.Second
+		if waitNS > 15*time.Second {
+			waitNS = 15 * time.Second
 		}
 	}
 }
