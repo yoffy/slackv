@@ -371,6 +371,8 @@ func onMessage(msg map[string]interface{}) {
 	switch msg["subtype"] {
 	case nil:
 		onPureMessage(msg)
+	case "file_comment":
+		onMessageFileComment(msg)
 	case "file_mention":
 		return
 	case "file_share":
@@ -387,23 +389,75 @@ func onMessage(msg map[string]interface{}) {
 func onPureMessage(msg map[string]interface{}) {
 	timestamp := getTimestamp(msg)
 	threadTs := getThreadTs(msg)
-	channel := g_IdNameMap[msg["channel"].(string)]
+	channel := getChannel(msg)
 	userType := getUserType(msg)
-	user := g_IdNameMap[msg["user"].(string)]
+	user := getUser(msg)
 	text := msg["text"].(string)
 
 	printMessage(timestamp, threadTs, channel, userType, user, text, "")
 }
 
+func onMessageFileComment(msg map[string]interface{}) {
+	file, exist := msg["file"].(map[string]interface{})
+	if !exist {
+		return
+	}
+	comment, exist := msg["comment"].(map[string]interface{})
+	if !exist {
+		return
+	}
+	timestamp := getTimestamp(msg)
+	threadTs := getThreadTs(msg)
+	channel := getChannel(msg)
+	userType := getUserType(msg)
+	user := getUser(comment)
+	title := "comment to: " + getTitle(file)
+	text := comment["comment"].(string)
+
+	title = "\033[44m" + strings.TrimSpace(title) + "\033[0m\n"
+	text = title + text
+
+	printMessage(timestamp, threadTs, channel, userType, user, text, "")
+
+	// display header on next message
+	g_LastUser = ""
+}
+
 func onMessageFileShare(msg map[string]interface{}) {
+	var text = ""
+
+	file, exist := msg["file"].(map[string]interface{})
+	if !exist {
+		return
+	}
+	timestamp := getTimestamp(msg)
+	threadTs := getThreadTs(msg)
+	channel := getChannel(msg)
+	userType := getUserType(msg)
+	user := getUser(msg)
+	title := "file: " + getTitle(file)
+	if preview, exist := file["preview"].(string); exist {
+		if isPreviewTruncated(file) {
+			preview = preview + "..."
+		}
+		title = "\033[44m" + strings.TrimSpace(title) + "\033[0m\n"
+		text = title + preview
+	} else {
+		text = msg["text"].(string)
+	}
+
+	printMessage(timestamp, threadTs, channel, userType, user, text, "")
+
+	// display header on next message
+	g_LastUser = ""
 }
 
 func onMessageMe(msg map[string]interface{}) {
 	timestamp := getTimestamp(msg)
 	threadTs := getThreadTs(msg)
-	channel := g_IdNameMap[msg["channel"].(string)]
+	channel := getChannel(msg)
 	userType := getUserType(msg)
-	user := g_IdNameMap[msg["user"].(string)]
+	user := getUser(msg)
 	text := "\033[3m\033[90m" + msg["text"].(string) + "\033[0m"
 
 	printMessage(timestamp, threadTs, channel, userType, user, text, "")
@@ -411,8 +465,6 @@ func onMessageMe(msg map[string]interface{}) {
 
 func onMessageChanged(msg map[string]interface{}) {
 	var text string
-	var channel = ""
-	var user = ""
 
 	message, exist := msg["message"].(map[string]interface{})
 	if !exist {
@@ -420,41 +472,37 @@ func onMessageChanged(msg map[string]interface{}) {
 	}
 	timestamp := getTimestamp(message)
 	threadTs := getThreadTs(msg)
-	if mayChannel, exist := msg["channel"]; exist {
-		channel = g_IdNameMap[mayChannel.(string)]
-	}
+	channel := getChannel(msg)
 	userType := getUserType(msg)
-	if mayUser, exist := message["user"]; exist {
-		user = g_IdNameMap[mayUser.(string)]
-	}
+	user := getUser(msg)
 	text = message["text"].(string)
 	annotation := " \033[93m(edited)\033[0m"
 	toRemoveLastUser := false
 
 	if attachments, exist := message["attachments"].([]interface{}); exist {
 		if attachment, exist := attachments[0].(map[string]interface{}); exist {
-			header := ""
+			title := ""
 			if serviceName, exist := attachment["service_name"].(string); exist {
-				header = header + serviceName + ": "
+				title = title + serviceName + ": "
 			}
 			if authorName, exist := attachment["author_name"].(string); exist {
-				header = header + authorName + " "
+				title = title + authorName + " "
 			}
 			if title, exist := attachment["title"].(string); exist {
-				header = header + title + " "
+				title = title + title + " "
 			}
 			if footer, exist := attachment["footer"].(string); exist {
-				header = header + " (" + footer + ") "
+				title = title + " (" + footer + ") "
 			}
-			if len(header) > 0 {
-				header = "\033[44m" + strings.TrimSpace(header) + "\033[0m\n"
+			if len(title) > 0 {
+				title = "\033[44m" + strings.TrimSpace(title) + "\033[0m\n"
 			}
 			text, exist = attachment["text"].(string)
 			if textLen := len(text); textLen > 1000 {
 				text = text[:1000] + "..."
 			}
 
-			text = header + text
+			text = title + text
 			annotation = ""
 			toRemoveLastUser = true
 		}
@@ -463,8 +511,16 @@ func onMessageChanged(msg map[string]interface{}) {
 	printMessage(timestamp, threadTs, channel, userType, user, text, annotation)
 
 	if toRemoveLastUser {
+		// display header on next message
 		g_LastUser = ""
 	}
+}
+
+func getChannel(msg map[string]interface{}) string {
+	if mayChannel, exist := msg["channel"]; exist {
+		return g_IdNameMap[mayChannel.(string)]
+	}
+	return ""
 }
 
 func getUserType(msg map[string]interface{}) string {
@@ -476,6 +532,13 @@ func getUserType(msg map[string]interface{}) string {
 		userType = userType + "[app]"
 	}
 	return userType
+}
+
+func getUser(msg map[string]interface{}) string {
+	if mayUser, exist := msg["user"]; exist {
+		return g_IdNameMap[mayUser.(string)]
+	}
+	return ""
 }
 
 func getTimestamp(msg map[string]interface{}) time.Time {
@@ -493,6 +556,28 @@ func getThreadTs(msg map[string]interface{}) time.Time {
 	}
 	return time.Unix(int64(fTs), 0)
 }
+
+func getTitle(msg map[string]interface{}) string {
+	if title, exist := msg["title"]; exist {
+		return title.(string)
+	}
+	return ""
+}
+
+func getPreview(msg map[string]interface{}) string {
+	if preview, exist := msg["preview"]; exist {
+		return preview.(string)
+	}
+	return ""
+}
+
+func isPreviewTruncated(msg map[string]interface{}) bool {
+	if isTruncated, exist := msg["preview_is_truncated"]; exist {
+		return isTruncated.(bool)
+	}
+	return false
+}
+
 
 func printMessage(
 	timestamp time.Time,
