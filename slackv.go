@@ -429,7 +429,7 @@ func onMessageChanged(msg map[string]interface{}) {
 		if attachment, exist := attachments[0].(map[string]interface{}); exist {
 			header := ""
 			if serviceName, exist := attachment["service_name"].(string); exist {
-				header = header + serviceName + ":"
+				header = header + serviceName + ": "
 			}
 			if authorName, exist := attachment["author_name"].(string); exist {
 				header = header + authorName + " "
