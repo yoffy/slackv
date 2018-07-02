@@ -536,7 +536,7 @@ func printMessage(
 
 func unescape(text string) string {
 	text = g_ChannelPattern.ReplaceAllString(text, "#$3")
-	text = g_KeywordPattern.ReplaceAllString(text, "@$3")
+	text = g_KeywordPattern.ReplaceAllString(text, "@$2")
 
 	isMatching := true
 	for isMatching {
