@@ -371,6 +371,8 @@ func onMessage(msg map[string]interface{}) {
 	switch msg["subtype"] {
 	case nil:
 		onPureMessage(msg)
+	case "bot_message":
+		onMessageBot(msg)
 	case "file_comment":
 		onMessageFileComment(msg)
 	case "file_mention":
@@ -395,6 +397,53 @@ func onPureMessage(msg map[string]interface{}) {
 	text := msg["text"].(string)
 
 	printMessage(timestamp, threadTs, channel, userType, user, text, "")
+}
+
+func onMessageBot(msg map[string]interface{}) {
+	var text string
+
+	timestamp := getTimestamp(msg)
+	threadTs := getThreadTs(msg)
+	channel := getChannel(msg)
+	userType := getUserType(msg)
+	user := getUser(msg)
+	text = msg["text"].(string)
+	toRemoveLastUser := false
+
+	if attachments, exist := msg["attachments"].([]interface{}); exist {
+		if attachment, exist := attachments[0].(map[string]interface{}); exist {
+			title := ""
+			if serviceName, exist := attachment["service_name"].(string); exist {
+				title = title + serviceName + ": "
+			}
+			if authorName, exist := attachment["author_name"].(string); exist {
+				title = title + authorName + " "
+			}
+			if title, exist := attachment["title"].(string); exist {
+				title = title + title + " "
+			}
+			if footer, exist := attachment["footer"].(string); exist {
+				title = title + " (" + footer + ") "
+			}
+			if len(title) > 0 {
+				title = "\033[44m" + strings.TrimSpace(title) + "\033[0m\n"
+			}
+			text, exist = attachment["text"].(string)
+			if textLen := len(text); textLen > 1000 {
+				text = text[:1000] + "..."
+			}
+
+			text = title + text
+			toRemoveLastUser = true
+		}
+	}
+
+	printMessage(timestamp, threadTs, channel, userType, user, text, "")
+
+	if toRemoveLastUser {
+		// display header on next message
+		g_LastUser = ""
+	}
 }
 
 func onMessageFileComment(msg map[string]interface{}) {
@@ -592,6 +641,9 @@ func printMessage(
 		return
 	}
 	if equalsAnyKeywords(user, g_Config.Notification.MuteUsers) {
+		return
+	}
+	if len(text) == 0 {
 		return
 	}
 
