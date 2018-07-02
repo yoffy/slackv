@@ -411,6 +411,8 @@ func onMessageMe(msg map[string]interface{}) {
 
 func onMessageChanged(msg map[string]interface{}) {
 	var text string
+	var channel = ""
+	var user = ""
 
 	message, exist := msg["message"].(map[string]interface{})
 	if !exist {
@@ -418,9 +420,13 @@ func onMessageChanged(msg map[string]interface{}) {
 	}
 	timestamp := getTimestamp(message)
 	threadTs := getThreadTs(msg)
-	channel := g_IdNameMap[msg["channel"].(string)]
+	if mayChannel, exist := msg["channel"]; exist {
+		channel = g_IdNameMap[mayChannel.(string)]
+	}
 	userType := getUserType(msg)
-	user := g_IdNameMap[message["user"].(string)]
+	if mayUser, exist := message["user"]; exist {
+		user = g_IdNameMap[mayUser.(string)]
+	}
 	text = message["text"].(string)
 	annotation := " \033[93m(edited)\033[0m"
 	toRemoveLastUser := false
