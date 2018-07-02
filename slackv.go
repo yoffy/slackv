@@ -413,26 +413,7 @@ func onMessageBot(msg map[string]interface{}) {
 	if attachments, exist := msg["attachments"].([]interface{}); exist {
 		if attachment, exist := attachments[0].(map[string]interface{}); exist {
 			title := ""
-			if serviceName, exist := attachment["service_name"].(string); exist {
-				title = title + serviceName + ": "
-			}
-			if authorName, exist := attachment["author_name"].(string); exist {
-				title = title + authorName + " "
-			}
-			if title, exist := attachment["title"].(string); exist {
-				title = title + title + " "
-			}
-			if footer, exist := attachment["footer"].(string); exist {
-				title = title + " (" + footer + ") "
-			}
-			if len(title) > 0 {
-				title = "\033[44m" + strings.TrimSpace(title) + "\033[0m\n"
-			}
-			text, exist = attachment["text"].(string)
-			if textLen := len(text); textLen > 1000 {
-				text = text[:1000] + "..."
-			}
-
+			text, title = getAttachmentText(attachment)
 			text = title + text
 			toRemoveLastUser = true
 		}
@@ -531,26 +512,7 @@ func onMessageChanged(msg map[string]interface{}) {
 	if attachments, exist := message["attachments"].([]interface{}); exist {
 		if attachment, exist := attachments[0].(map[string]interface{}); exist {
 			title := ""
-			if serviceName, exist := attachment["service_name"].(string); exist {
-				title = title + serviceName + ": "
-			}
-			if authorName, exist := attachment["author_name"].(string); exist {
-				title = title + authorName + " "
-			}
-			if title, exist := attachment["title"].(string); exist {
-				title = title + title + " "
-			}
-			if footer, exist := attachment["footer"].(string); exist {
-				title = title + " (" + footer + ") "
-			}
-			if len(title) > 0 {
-				title = "\033[44m" + strings.TrimSpace(title) + "\033[0m\n"
-			}
-			text, exist = attachment["text"].(string)
-			if textLen := len(text); textLen > 1000 {
-				text = text[:1000] + "..."
-			}
-
+			text, title = getAttachmentText(attachment)
 			text = title + text
 			annotation = ""
 			toRemoveLastUser = true
@@ -625,6 +587,33 @@ func isPreviewTruncated(msg map[string]interface{}) bool {
 		return isTruncated.(bool)
 	}
 	return false
+}
+
+func getAttachmentText(attachment map[string]interface{}) (string, string) {
+	text := ""
+	title := ""
+
+	if serviceName, exist := attachment["service_name"].(string); exist {
+		title = title + serviceName + ": "
+	}
+	if authorName, exist := attachment["author_name"].(string); exist {
+		title = title + authorName + " "
+	}
+	if title, exist := attachment["title"].(string); exist {
+		title = title + title + " "
+	}
+	if footer, exist := attachment["footer"].(string); exist {
+		title = title + " (" + footer + ") "
+	}
+	if len(title) > 0 {
+		title = "\033[44m" + strings.TrimSpace(title) + "\033[0m\n"
+	}
+	text, _ = attachment["text"].(string)
+	if textLen := len(text); textLen > 1000 {
+		text = text[:1000] + "..."
+	}
+
+	return text, title
 }
 
 
