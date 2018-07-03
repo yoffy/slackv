@@ -392,7 +392,7 @@ func onMessage(msg map[string]interface{}) {
 	case "message_changed":
 		onMessageChanged(msg)
 	case "message_replied":
-		onMessageReplied(msg)
+		return
 	}
 }
 
@@ -530,21 +530,6 @@ func onMessageChanged(msg map[string]interface{}) {
 		// display header on next message
 		g_LastUser = ""
 	}
-}
-
-func onMessageReplied(msg map[string]interface{}) {
-	message, exist := msg["message"].(map[string]interface{})
-	if !exist {
-		return
-	}
-	timestamp := getTimestamp(message)
-	threadTs := getThreadTs(message)
-	channel := getChannel(msg)
-	userType := getUserType(message)
-	user := getUser(message)
-	text := getText(message)
-
-	printMessage(timestamp, threadTs, channel, userType, user, text, "")
 }
 
 func getChannel(msg map[string]interface{}) string {
