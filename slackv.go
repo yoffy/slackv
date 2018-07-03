@@ -510,7 +510,7 @@ func onMessageChanged(msg map[string]interface{}) {
 	threadTs := getThreadTs(msg)
 	channel := getChannel(msg)
 	userType := getUserType(msg)
-	user := getUser(msg)
+	user := getUser(message)
 	text = message["text"].(string)
 	annotation := " \033[93m(edited)\033[0m"
 	toRemoveLastUser := false
