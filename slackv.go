@@ -400,14 +400,12 @@ func onPureMessage(msg map[string]interface{}) {
 }
 
 func onMessageBot(msg map[string]interface{}) {
-	var text string
-
 	timestamp := getTimestamp(msg)
 	threadTs := getThreadTs(msg)
 	channel := getChannel(msg)
 	userType := getUserType(msg)
 	user := getUser(msg)
-	text = msg["text"].(string)
+	text := getText(msg)
 	toRemoveLastUser := false
 
 	if attachments, exist := msg["attachments"].([]interface{}); exist {
@@ -548,6 +546,13 @@ func getUserType(msg map[string]interface{}) string {
 func getUser(msg map[string]interface{}) string {
 	if mayUser, exist := msg["user"]; exist {
 		return g_IdNameMap[mayUser.(string)]
+	}
+	return ""
+}
+
+func getText(msg map[string]interface{}) string {
+	if mayText, exist := msg["text"]; exist {
+		return mayText.(string)
 	}
 	return ""
 }
