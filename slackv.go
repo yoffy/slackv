@@ -500,9 +500,11 @@ func onMessageMe(msg map[string]interface{}) {
 }
 
 func onMessageChanged(msg map[string]interface{}) {
-	var text string
-
 	message, exist := msg["message"].(map[string]interface{})
+	if !exist {
+		return
+	}
+	prevMessage, exist := msg["previous_message"].(map[string]interface{})
 	if !exist {
 		return
 	}
@@ -511,23 +513,20 @@ func onMessageChanged(msg map[string]interface{}) {
 	channel := getChannel(msg)
 	userType := getUserType(msg)
 	user := getUser(message)
-	text = message["text"].(string)
-	annotation := " \033[93m(edited)\033[0m"
-	toRemoveLastUser := false
-
-	if attachments, exist := message["attachments"].([]interface{}); exist {
-		if attachment, exist := attachments[0].(map[string]interface{}); exist {
-			title := ""
-			text, title = getAttachmentText(attachment)
-			text = title + text
-			annotation = ""
-			toRemoveLastUser = true
-		}
+	text := getText(message)
+	prevText := getText(prevMessage)
+	if text != prevText {
+		annotation := " \033[93m(edited)\033[0m"
+		printMessage(timestamp, threadTs, channel, userType, user, text, annotation)
 	}
 
-	printMessage(timestamp, threadTs, channel, userType, user, text, annotation)
+	attText, attTitle := getAttachmentsText(message)
+	attText = attTitle + attText
+	prevAttText, prevAttTitle := getAttachmentsText(prevMessage)
+	prevAttText = prevAttTitle + prevAttText
+	if attText != prevAttText {
+		printMessage(timestamp, threadTs, channel, userType, user, attText, "")
 
-	if toRemoveLastUser {
 		// display header on next message
 		g_LastUser = ""
 	}
@@ -607,6 +606,15 @@ func isPreviewTruncated(msg map[string]interface{}) bool {
 		return isTruncated.(bool)
 	}
 	return false
+}
+
+func getAttachmentsText(msg map[string]interface{}) (string, string) {
+	if attachments, exist := msg["attachments"].([]interface{}); exist {
+		if attachment, exist := attachments[0].(map[string]interface{}); exist {
+			return getAttachmentText(attachment)
+		}
+	}
+	return "", ""
 }
 
 func getAttachmentText(attachment map[string]interface{}) (string, string) {
