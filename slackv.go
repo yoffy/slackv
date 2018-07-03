@@ -178,7 +178,8 @@ func main() {
 		}
 
 	L_Error:
-		if err != lastError {
+
+		if !errorEquals(err, lastError) {
 			log.Print(err)
 			log.Printf("Connecting...\n", waitNS/time.Second)
 			lastError = err
@@ -190,6 +191,13 @@ func main() {
 			waitNS = 15 * time.Second
 		}
 	}
+}
+
+func errorEquals(a error, b error) bool {
+	if a != nil && b != nil {
+		return a.Error() == b.Error()
+	}
+	return a == b
 }
 
 func loadConfig(path string) error {
