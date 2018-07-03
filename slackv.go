@@ -404,7 +404,7 @@ func onMessageBot(msg map[string]interface{}) {
 	threadTs := getThreadTs(msg)
 	channel := getChannel(msg)
 	userType := getUserType(msg)
-	user := getUser(msg)
+	user := getBot(msg)
 	text := getText(msg)
 	toRemoveLastUser := false
 
@@ -550,6 +550,13 @@ func getUser(msg map[string]interface{}) string {
 	return ""
 }
 
+func getBot(msg map[string]interface{}) string {
+	if mayBot, exist := msg["bot_id"]; exist {
+		return g_IdNameMap[mayBot.(string)]
+	}
+	return ""
+}
+
 func getText(msg map[string]interface{}) string {
 	if mayText, exist := msg["text"]; exist {
 		return mayText.(string)
@@ -597,6 +604,7 @@ func isPreviewTruncated(msg map[string]interface{}) bool {
 func getAttachmentText(attachment map[string]interface{}) (string, string) {
 	text := ""
 	title := ""
+	exist := false
 
 	if serviceName, exist := attachment["service_name"].(string); exist {
 		title = title + serviceName + ": "
@@ -613,7 +621,9 @@ func getAttachmentText(attachment map[string]interface{}) (string, string) {
 	if len(title) > 0 {
 		title = "\033[44m" + strings.TrimSpace(title) + "\033[0m\n"
 	}
-	text, _ = attachment["text"].(string)
+	if text, exist = attachment["text"].(string); !exist {
+		text, _ = attachment["fallback"].(string)
+	}
 	if textLen := len(text); textLen > 1000 {
 		text = text[:1000] + "..."
 	}
