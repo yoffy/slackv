@@ -647,7 +647,6 @@ func getAttachmentText(attachment map[string]interface{}) (string, string) {
 	return text, title
 }
 
-
 func printMessage(
 	timestamp time.Time,
 	threadTs time.Time,
@@ -705,7 +704,7 @@ func printMessage(
 
 func unescape(text string) string {
 	text = g_ChannelPattern.ReplaceAllString(text, "#$3")
-	text = g_KeywordPattern.ReplaceAllString(text, "@$2")
+	text = g_KeywordPattern.ReplaceAllString(text, "@$1")
 
 	isMatching := true
 	for isMatching {
