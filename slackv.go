@@ -703,17 +703,26 @@ func printMessage(
 }
 
 func unescape(text string) string {
-	text = g_ChannelPattern.ReplaceAllString(text, "#$3")
-	text = g_KeywordPattern.ReplaceAllString(text, "@$1")
+	// <#G01234|group> or <#G01234>
+	for isMatching := true; isMatching; {
+		isMatching = false
+		if index := g_ChannelPattern.FindStringSubmatchIndex(text); index != nil {
+			isMatching = true
+			text = text[:index[0]] + "#" + g_IdNameMap[text[index[2]:index[3]]] + text[index[1]:]
+		}
+	}
 
-	isMatching := true
-	for isMatching {
+	// <@U01234|user> or <@U01234>
+	for isMatching := true; isMatching; {
 		isMatching = false
 		if index := g_MentionPattern.FindStringSubmatchIndex(text); index != nil {
 			isMatching = true
 			text = text[:index[0]] + "@" + g_IdNameMap[text[index[2]:index[3]]] + text[index[1]:]
 		}
 	}
+
+	// <!here|here> or <!here>
+	text = g_KeywordPattern.ReplaceAllString(text, "@$1")
 	return html.UnescapeString(text)
 }
 
