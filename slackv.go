@@ -181,7 +181,7 @@ func main() {
 
 		if !errorEquals(err, lastError) {
 			log.Print(err)
-			log.Printf("Connecting...\n", waitNS/time.Second)
+			log.Printf("Connecting...\n")
 			lastError = err
 		}
 
