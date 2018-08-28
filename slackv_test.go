@@ -57,7 +57,7 @@ func TestUnescape4(t *testing.T) {
 	if result != expected {
 		t.Errorf("expected \"%s\", but \"%s\"\n", expected, result)
 	}
-	result = unescape("@hoge-piyo foo")
+	result = unescape("<!subteam^S1A2B3C4D> foo")
 	if result != expected {
 		t.Errorf("expected \"%s\", but \"%s\"\n", expected, result)
 	}
