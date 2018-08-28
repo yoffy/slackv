@@ -63,12 +63,24 @@ type SlackChannel struct {
 	IsPrivate bool   `json:"is_private"`
 }
 
-//! @see https://api.slack.com/types/group
+//! superseded by SlackSubteam (@see https://api.slack.com/types/group)
 type SlackGroup struct {
 	Id         string   `json:"id"`
 	Name       string   `json:"name"`
 	IsArchived bool     `json:"is_archived"`
 	Members    []string `json:"members"`
+}
+
+//! sucessor of SlackGroup (undocumented)
+type SlackSubteam struct {
+	Id        string `json:"id"`
+	ShortDesc string `json:"name"`   //!< Short description
+	Name      string `json:"handle"` //!< Display Name
+}
+
+type SlackSubteams struct {
+	Self []string       `json:"self"` //!< joined subteams
+	All  []SlackSubteam `json:"all"`  //!< body
 }
 
 //! multiparty IM
@@ -99,6 +111,7 @@ type SlackSession struct {
 	Users    []SlackUser
 	Channels []SlackChannel
 	Groups   []SlackGroup
+	Subteams SlackSubteams
 	Mpims    []SlackMpim //!< multiparty IM
 	Ims      []SlackIm
 	Bots     []SlackBot
@@ -137,6 +150,7 @@ var g_LastThreadTs = time.Unix(0, 0)
 
 var g_MentionPattern = regexp.MustCompile(`<@([^>|]+)(\|([^>]+))?>`)
 var g_ChannelPattern = regexp.MustCompile(`<#([^>|]+)(\|([^>]+))?>`)
+var g_UserGroupPattern = regexp.MustCompile(`<!subteam\^([^>|]+)(\|([^>]+))?>`)
 var g_KeywordPattern = regexp.MustCompile(`<!([^>|]+)(\|([^>]+))?>`)
 var g_NotificationPatterns []*regexp.Regexp
 
@@ -287,6 +301,9 @@ func generateIdNameMap(session SlackSession) map[string]string {
 	}
 	for _, group := range session.Groups {
 		result[group.Id] = group.Name
+	}
+	for _, subteam := range session.Subteams.All {
+		result[subteam.Id] = subteam.Name
 	}
 	for _, mpim := range session.Mpims {
 		result[mpim.Id] = mpim.Name
@@ -718,6 +735,17 @@ func unescape(text string) string {
 		if index := g_MentionPattern.FindStringSubmatchIndex(text); index != nil {
 			isMatching = true
 			text = text[:index[0]] + "@" + g_IdNameMap[text[index[2]:index[3]]] + text[index[1]:]
+		}
+	}
+
+	// <!subteam^S1A2B3C4D|@user-group> or <!subteam^S1A2B3C4D>
+	for isMatching := true; isMatching; {
+		isMatching = false
+		if index := g_UserGroupPattern.FindStringSubmatchIndex(text); index != nil {
+			if name, exist := g_IdNameMap[text[index[2]:index[3]]]; exist {
+				isMatching = true
+				text = text[:index[0]] + "@" + name + text[index[1]:]
+			}
 		}
 	}
 

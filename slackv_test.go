@@ -49,3 +49,16 @@ func TestUnescape3(t *testing.T) {
 		t.Errorf("expected \"%s\", but \"%s\"\n", expected, result)
 	}
 }
+
+func TestUnescape4(t *testing.T) {
+	g_IdNameMap = map[string]string{"S1A2B3C4D": "hoge-piyo"}
+	expected := "@hoge-piyo foo"
+	result := unescape("<!subteam^S1A2B3C4D|@hoge-piyo> foo")
+	if result != expected {
+		t.Errorf("expected \"%s\", but \"%s\"\n", expected, result)
+	}
+	result = unescape("@hoge-piyo foo")
+	if result != expected {
+		t.Errorf("expected \"%s\", but \"%s\"\n", expected, result)
+	}
+}
