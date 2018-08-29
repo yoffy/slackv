@@ -645,8 +645,8 @@ func getAttachmentText(attachment map[string]interface{}) (string, string) {
 	if authorName, exist := attachment["author_name"].(string); exist {
 		title = title + authorName + " "
 	}
-	if title, exist := attachment["title"].(string); exist {
-		title = title + title + " "
+	if aTitle, exist := attachment["title"].(string); exist {
+		title = title + aTitle + " "
 	}
 	if footer, exist := attachment["footer"].(string); exist {
 		title = title + " (" + footer + ") "
