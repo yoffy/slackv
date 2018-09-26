@@ -45,9 +45,15 @@ type Token struct {
 	Token string
 }
 
+type SlackProfile struct {
+	DisplayName string `json:"display_name"`
+}
+
 type SlackUser struct {
-	Id   string
-	Name string
+	Id       string
+	Name     string
+	RealName string `json:"real_name"`
+	Profile  SlackProfile
 }
 
 type SlackTeam struct {
@@ -291,7 +297,13 @@ func generateIdNameMap(session SlackSession) map[string]string {
 	result := map[string]string{}
 
 	for _, user := range session.Users {
-		result[user.Id] = user.Name
+		if len(user.Profile.DisplayName) > 0 {
+			result[user.Id] = user.Profile.DisplayName
+		} else if len(user.RealName) > 0 {
+			result[user.Id] = user.RealName
+		} else {
+			result[user.Id] = user.Name
+		}
 	}
 	for _, bot := range session.Bots {
 		result[bot.Id] = bot.Name
