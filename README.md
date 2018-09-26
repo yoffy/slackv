@@ -7,7 +7,7 @@ Available to use for Linux, macOS and Windows.
 # How to build
 
 ```
-$ go get github.com/BurntSushi/toml golang.org/x/net/websocket
+$ go get github.com/BurntSushi/toml github.com/fsnotify/fsnotify golang.org/x/net/websocket
 $ git clone https://github.com/yoffy/slackv.git
 $ cd slackv
 $ go build slackv

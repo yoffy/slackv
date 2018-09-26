@@ -13,6 +13,7 @@ import "strings"
 import "time"
 
 import "github.com/BurntSushi/toml"
+import "github.com/fsnotify/fsnotify"
 import "golang.org/x/net/websocket"
 
 import "slackv/console"
@@ -158,8 +159,11 @@ var g_MentionPattern = regexp.MustCompile(`<@([^>|]+)(\|([^>]+))?>`)
 var g_ChannelPattern = regexp.MustCompile(`<#([^>|]+)(\|([^>]+))?>`)
 var g_UserGroupPattern = regexp.MustCompile(`<!subteam\^([^>|]+)(\|([^>]+))?>`)
 var g_KeywordPattern = regexp.MustCompile(`<!([^>|]+)(\|([^>]+))?>`)
+
+//! @fixme to access atomic
 var g_NotificationPatterns []*regexp.Regexp
 
+//! @fixme to access atomic
 var g_Config Config
 
 //==============================
@@ -170,10 +174,13 @@ func main() {
 	console.Initialize()
 	defer console.Finalize()
 
-	err := loadConfig("config.toml")
-	if err != nil {
+	if err := loadConfig("config.toml"); err != nil {
 		log.Fatal(err)
 		return
+	}
+
+	if err := watchConfig("config.toml"); err != nil {
+		log.Fatal(err)
 	}
 
 	fmt.Println("Connecting...")
@@ -234,6 +241,44 @@ func loadConfig(path string) error {
 				g_NotificationPatterns = append(g_NotificationPatterns, regex)
 			}
 		}
+	}
+
+	return nil
+}
+
+func watchConfig(path string) error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		defer watcher.Close()
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					log.Println("reload config:", event.Name)
+					if err := loadConfig(event.Name); err != nil {
+						log.Fatal(err)
+						return
+					}
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Fatal(err)
+			}
+		}
+	}()
+
+	if err := watcher.Add(path); err != nil {
+		return err
 	}
 
 	return nil
