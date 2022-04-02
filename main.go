@@ -1,22 +1,28 @@
 package main
 
-import "encoding/json"
-import "fmt"
-import "html"
-import "io/ioutil"
-import "log"
-import "net/http"
-import "net/url"
-import "regexp"
-import "strconv"
-import "strings"
-import "time"
+import (
+	"encoding/json"
+	"fmt"
+	"html"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"net/url"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+)
 
-import "github.com/BurntSushi/toml"
-import "github.com/fsnotify/fsnotify"
-import "golang.org/x/net/websocket"
+import (
+	"github.com/BurntSushi/toml"
+	"github.com/fsnotify/fsnotify"
+	"golang.org/x/net/websocket"
+)
 
-import "slackv/console"
+import (
+	"slackv/console"
+)
 
 //==============================
 // config structures
