@@ -406,8 +406,6 @@ func onGroupJoined(msg map[string]interface{}) {
 
 func onMessage(msg map[string]interface{}) {
 	switch msg["subtype"] {
-	case nil:
-		onPureMessage(msg)
 	case "bot_message":
 		onMessageBot(msg)
 	case "file_comment":
@@ -422,6 +420,10 @@ func onMessage(msg map[string]interface{}) {
 		onMessageChanged(msg)
 	case "message_replied":
 		return
+	default:
+		if _, exist := msg["text"]; exist {
+			onPureMessage(msg)
+		}
 	}
 }
 
