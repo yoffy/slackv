@@ -40,7 +40,7 @@ type ConfigNotification struct {
 // Slack structures
 //==============================
 
-//! @see https://api.slack.com/methods/rtm.start
+//! @see https://api.slack.com/methods/rtm.connect
 type Token struct {
 	Token string
 }
@@ -56,6 +56,11 @@ type SlackUser struct {
 	Profile  SlackProfile
 }
 
+type SlackUsersInfoResponse struct {
+	Ok   bool
+	User SlackUser
+}
+
 type SlackTeam struct {
 	Id   string
 	Name string
@@ -65,8 +70,14 @@ type SlackTeam struct {
 type SlackChannel struct {
 	Id        string `json:"id"`
 	Name      string `json:"name"`
+	User      string `json:"user"` // for Direct Message
 	IsMember  bool   `json:"is_member"`
 	IsPrivate bool   `json:"is_private"`
+}
+
+type SlackConversationsInfoResponse struct {
+	Ok      bool
+	Channel SlackChannel
 }
 
 //! superseded by SlackSubteam (@see https://api.slack.com/types/group)
@@ -87,6 +98,11 @@ type SlackSubteam struct {
 type SlackSubteams struct {
 	Self []string       `json:"self"` //!< joined subteams
 	All  []SlackSubteam `json:"all"`  //!< body
+}
+
+type SlackUserGroupsListResponse struct {
+	Ok         bool
+	UserGroups []SlackSubteam
 }
 
 //! multiparty IM
@@ -110,17 +126,11 @@ type SlackBot struct {
 }
 
 type SlackSession struct {
-	Ok       bool
-	Url      string
-	Self     SlackUser
-	Team     SlackTeam
-	Users    []SlackUser
-	Channels []SlackChannel
-	Groups   []SlackGroup
-	Subteams SlackSubteams
-	Mpims    []SlackMpim //!< multiparty IM
-	Ims      []SlackIm
-	Bots     []SlackBot
+	Ok    bool
+	Error string
+	Url   string
+	Self  SlackUser
+	Team  SlackTeam
 }
 
 //==============================
@@ -170,6 +180,8 @@ func main() {
 	console.Initialize()
 	defer console.Finalize()
 
+	g_IdNameMap = map[string]string{}
+
 	err := loadConfig("config.toml")
 	if err != nil {
 		log.Fatal(err)
@@ -190,6 +202,8 @@ func main() {
 
 		waitNS = 1 * time.Second
 		lastError = nil
+
+		cacheUserGroups()
 
 		err = receiveRoutine(ws)
 		if err != nil {
@@ -246,8 +260,6 @@ func connect(token string) (*websocket.Conn, error) {
 		return nil, err
 	}
 
-	g_IdNameMap = generateIdNameMap(session)
-
 	ws, err := websocket.Dial(session.Url, "", "http://localhost/")
 	if err != nil {
 		return nil, err
@@ -263,7 +275,7 @@ func login(token string) (SlackSession, error) {
 
 	request, err := http.NewRequest(
 		"POST",
-		"https://slack.com/api/rtm.start",
+		"https://slack.com/api/rtm.connect",
 		strings.NewReader(query.Encode()),
 	)
 	if err != nil {
@@ -288,43 +300,50 @@ func login(token string) (SlackSession, error) {
 	if err := json.Unmarshal(data, &session); err != nil {
 		return SlackSession{}, err
 	}
+	if !session.Ok {
+		return session, fmt.Errorf("Error: %s", session.Error)
+	}
 
 	return session, nil
 }
 
-//! generate mapping to id and name from SlackSession
-func generateIdNameMap(session SlackSession) map[string]string {
-	result := map[string]string{}
+func cacheUserGroups() error {
+	query := url.Values{}
+	query.Set("token", g_Config.General.Token)
 
-	for _, user := range session.Users {
-		if len(user.Profile.DisplayName) > 0 {
-			result[user.Id] = user.Profile.DisplayName
-		} else if len(user.RealName) > 0 {
-			result[user.Id] = user.RealName
-		} else {
-			result[user.Id] = user.Name
-		}
-	}
-	for _, bot := range session.Bots {
-		result[bot.Id] = bot.Name
-	}
-	for _, channel := range session.Channels {
-		result[channel.Id] = channel.Name
-	}
-	for _, group := range session.Groups {
-		result[group.Id] = group.Name
-	}
-	for _, subteam := range session.Subteams.All {
-		result[subteam.Id] = subteam.Name
-	}
-	for _, mpim := range session.Mpims {
-		result[mpim.Id] = mpim.Name
-	}
-	for _, im := range session.Ims {
-		result[im.Id] = result[im.UserId]
+	request, err := http.NewRequest(
+		"POST",
+		"https://slack.com/api/usergroups.list",
+		strings.NewReader(query.Encode()),
+	)
+	if err != nil {
+		return err
 	}
 
-	return result
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{}
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+
+	data, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+
+	groupsResponse := SlackUserGroupsListResponse{}
+	if err := json.Unmarshal(data, &groupsResponse); err != nil {
+		return err
+	}
+
+	for _, group := range groupsResponse.UserGroups {
+		g_IdNameMap[group.Id] = group.Name
+	}
+
+	return nil
 }
 
 //! receiving loop
@@ -430,9 +449,9 @@ func onMessage(msg map[string]interface{}) {
 func onPureMessage(msg map[string]interface{}) {
 	timestamp := getTimestamp(msg)
 	threadTs := getThreadTs(msg)
-	channel := getChannel(msg)
+	channel := getChannelByMessage(msg)
 	userType := getUserType(msg)
-	user := getUser(msg)
+	user := getUserByMessage(msg)
 	text := msg["text"].(string)
 
 	printMessage(timestamp, threadTs, channel, userType, user, text, "")
@@ -441,7 +460,7 @@ func onPureMessage(msg map[string]interface{}) {
 func onMessageBot(msg map[string]interface{}) {
 	timestamp := getTimestamp(msg)
 	threadTs := getThreadTs(msg)
-	channel := getChannel(msg)
+	channel := getChannelByMessage(msg)
 	userType := getUserType(msg)
 	user := getBot(msg)
 	text := getText(msg)
@@ -475,9 +494,9 @@ func onMessageFileComment(msg map[string]interface{}) {
 	}
 	timestamp := getTimestamp(msg)
 	threadTs := getThreadTs(msg)
-	channel := getChannel(msg)
+	channel := getChannelByMessage(msg)
 	userType := getUserType(msg)
-	user := getUser(comment)
+	user := getUserByMessage(comment)
 	title := "comment to: " + getTitle(file)
 	text := comment["comment"].(string)
 
@@ -499,9 +518,9 @@ func onMessageFileShare(msg map[string]interface{}) {
 	}
 	timestamp := getTimestamp(msg)
 	threadTs := getThreadTs(msg)
-	channel := getChannel(msg)
+	channel := getChannelByMessage(msg)
 	userType := getUserType(msg)
-	user := getUser(msg)
+	user := getUserByMessage(msg)
 	title := "file: " + getTitle(file)
 	if preview, exist := file["preview"].(string); exist {
 		if isPreviewTruncated(file) {
@@ -522,9 +541,9 @@ func onMessageFileShare(msg map[string]interface{}) {
 func onMessageMe(msg map[string]interface{}) {
 	timestamp := getTimestamp(msg)
 	threadTs := getThreadTs(msg)
-	channel := getChannel(msg)
+	channel := getChannelByMessage(msg)
 	userType := getUserType(msg)
-	user := getUser(msg)
+	user := getUserByMessage(msg)
 	text := "\033[3m\033[90m" + msg["text"].(string) + "\033[0m"
 
 	printMessage(timestamp, threadTs, channel, userType, user, text, "")
@@ -541,9 +560,9 @@ func onMessageChanged(msg map[string]interface{}) {
 	}
 	timestamp := getTimestamp(message)
 	threadTs := getThreadTs(msg)
-	channel := getChannel(msg)
+	channel := getChannelByMessage(msg)
 	userType := getUserType(msg)
-	user := getUser(message)
+	user := getUserByMessage(message)
 	text := getText(message)
 	prevText := getText(prevMessage)
 	if text != prevText {
@@ -563,9 +582,60 @@ func onMessageChanged(msg map[string]interface{}) {
 	}
 }
 
-func getChannel(msg map[string]interface{}) string {
-	if mayChannel, exist := msg["channel"]; exist {
-		return g_IdNameMap[mayChannel.(string)]
+func cacheChannelInfo(name string) error {
+	query := url.Values{}
+	query.Set("token", g_Config.General.Token)
+	query.Set("channel", name)
+
+	request, err := http.NewRequest(
+		"POST",
+		"https://slack.com/api/conversations.info",
+		strings.NewReader(query.Encode()),
+	)
+	if err != nil {
+		return err
+	}
+
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{}
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+
+	data, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+
+	conversationResponse := SlackConversationsInfoResponse{}
+	if err := json.Unmarshal(data, &conversationResponse); err != nil {
+		return err
+	}
+
+	if len(conversationResponse.Channel.Name) > 0 {
+		g_IdNameMap[name] = conversationResponse.Channel.Name
+	} else if len(conversationResponse.Channel.User) > 0 {
+		g_IdNameMap[name] = getUser(conversationResponse.Channel.User)
+	}
+
+	return nil
+}
+
+func getChannel(channel string) string {
+	if _, cached := g_IdNameMap[channel]; !cached {
+		if err := cacheChannelInfo(channel); err != nil {
+			log.Print(err)
+		}
+	}
+	return g_IdNameMap[channel]
+}
+
+func getChannelByMessage(msg map[string]interface{}) string {
+	if mayChannel, existField := msg["channel"]; existField {
+		return getChannel(mayChannel.(string))
 	}
 	return ""
 }
@@ -581,9 +651,60 @@ func getUserType(msg map[string]interface{}) string {
 	return userType
 }
 
-func getUser(msg map[string]interface{}) string {
-	if mayUser, exist := msg["user"]; exist {
-		return g_IdNameMap[mayUser.(string)]
+func cacheUserInfo(name string) error {
+	query := url.Values{}
+	query.Set("token", g_Config.General.Token)
+	query.Set("user", name)
+
+	request, err := http.NewRequest(
+		"POST",
+		"https://slack.com/api/users.info",
+		strings.NewReader(query.Encode()),
+	)
+	if err != nil {
+		return err
+	}
+
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{}
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+
+	data, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+
+	userResponse := SlackUsersInfoResponse{}
+	if err := json.Unmarshal(data, &userResponse); err != nil {
+		return err
+	}
+
+	if len(userResponse.User.Profile.DisplayName) > 0 {
+		g_IdNameMap[name] = userResponse.User.Profile.DisplayName
+	} else {
+		g_IdNameMap[name] = userResponse.User.Name
+	}
+
+	return nil
+}
+
+func getUser(user string) string {
+	if _, cachedUser := g_IdNameMap[user]; !cachedUser {
+		if err := cacheUserInfo(user); err != nil {
+			log.Print(err)
+		}
+	}
+	return g_IdNameMap[user]
+}
+
+func getUserByMessage(msg map[string]interface{}) string {
+	if mayUser, existField := msg["user"]; existField {
+		return getUser(mayUser.(string))
 	}
 	return ""
 }
@@ -739,7 +860,7 @@ func unescape(text string) string {
 		isMatching = false
 		if index := g_ChannelPattern.FindStringSubmatchIndex(text); index != nil {
 			isMatching = true
-			text = text[:index[0]] + "#" + g_IdNameMap[text[index[2]:index[3]]] + text[index[1]:]
+			text = text[:index[0]] + "#" + getChannel(text[index[2]:index[3]]) + text[index[1]:]
 		}
 	}
 
@@ -748,7 +869,7 @@ func unescape(text string) string {
 		isMatching = false
 		if index := g_MentionPattern.FindStringSubmatchIndex(text); index != nil {
 			isMatching = true
-			text = text[:index[0]] + "@" + g_IdNameMap[text[index[2]:index[3]]] + text[index[1]:]
+			text = text[:index[0]] + "@" + getUser(text[index[2]:index[3]]) + text[index[1]:]
 		}
 	}
 
