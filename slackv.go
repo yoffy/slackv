@@ -138,19 +138,29 @@ type SlackSession struct {
 //==============================
 
 var g_IgnoreMessageTypes = map[string]struct{}{
-	"channel_marked":   struct{}{},
-	"file_change":      struct{}{},
-	"file_public":      struct{}{},
-	"file_shared":      struct{}{},
-	"group_marked":     struct{}{},
-	"im_marked":        struct{}{},
-	"message":          struct{}{},
-	"perf_change":      struct{}{},
-	"reaction_added":   struct{}{},
-	"reaction_removed": struct{}{},
-	"thread_marked":    struct{}{},
-	"user_change":      struct{}{},
-	"user_typing":      struct{}{},
+	"bot_added":           struct{}{},
+	"channel_joined":      struct{}{},
+	"channel_marked":      struct{}{},
+	"dnd_updated_user":    struct{}{},
+	"file_change":         struct{}{},
+	"file_public":         struct{}{},
+	"file_shared":         struct{}{},
+	"group_joined":        struct{}{},
+	"group_marked":        struct{}{},
+	"im_marked":           struct{}{},
+	"perf_change":         struct{}{},
+	"reaction_added":      struct{}{},
+	"reaction_removed":    struct{}{},
+	"thread_marked":       struct{}{},
+	"user_change":         struct{}{},
+	"user_huddle_changed": struct{}{},
+	"user_status_changed": struct{}{},
+	"user_typing":         struct{}{},
+}
+var g_InfoMessageTypes = map[string]struct{}{
+	"channel_created":      struct{}{},
+	"message":              struct{}{},
+	"user_profile_changed": struct{}{},
 }
 
 //==============================
@@ -164,10 +174,10 @@ var g_LastUser = ""
 var g_LastChannel = ""
 var g_LastThreadTs = time.Unix(0, 0)
 
-var g_MentionPattern = regexp.MustCompile(`<@([^>|]+)(\|([^>]+))?>`)
-var g_ChannelPattern = regexp.MustCompile(`<#([^>|]+)(\|([^>]+))?>`)
-var g_UserGroupPattern = regexp.MustCompile(`<!subteam\^([^>|]+)(\|([^>]+))?>`)
-var g_KeywordPattern = regexp.MustCompile(`<!([^>|]+)(\|([^>]+))?>`)
+var g_MentionPattern = regexp.MustCompile(`<@([^>|]+)(\|([^>]*))?>`)
+var g_ChannelPattern = regexp.MustCompile(`<#([^>|]+)(\|([^>]*))?>`)
+var g_UserGroupPattern = regexp.MustCompile(`<!subteam\^([^>|]+)(\|([^>]*))?>`)
+var g_KeywordPattern = regexp.MustCompile(`<!([^>|]+)(\|([^>]*))?>`)
 var g_NotificationPatterns []*regexp.Regexp
 
 var g_Config Config
@@ -203,7 +213,11 @@ func main() {
 		waitNS = 1 * time.Second
 		lastError = nil
 
-		cacheUserGroups()
+		err = cacheUserGroups()
+		if err != nil {
+			ws.Close()
+			goto L_Error
+		}
 
 		err = receiveRoutine(ws)
 		if err != nil {
@@ -215,8 +229,10 @@ func main() {
 
 		if !errorEquals(err, lastError) {
 			log.Print(err)
-			log.Printf("Connecting...\n")
+			log.Printf("Connecting...")
 			lastError = err
+		} else {
+			log.Printf(".")
 		}
 
 		time.Sleep(waitNS)
