@@ -40,7 +40,7 @@ type ConfigNotification struct {
 // Slack structures
 //==============================
 
-//! @see https://api.slack.com/methods/rtm.connect
+// @see https://api.slack.com/methods/rtm.connect
 type Token struct {
 	Token string
 }
@@ -66,7 +66,7 @@ type SlackTeam struct {
 	Name string
 }
 
-//! @see https://api.slack.com/types/channel
+// @see https://api.slack.com/types/channel
 type SlackChannel struct {
 	Id        string `json:"id"`
 	Name      string `json:"name"`
@@ -80,7 +80,7 @@ type SlackConversationsInfoResponse struct {
 	Channel SlackChannel
 }
 
-//! superseded by SlackSubteam (@see https://api.slack.com/types/group)
+// superseded by SlackSubteam (@see https://api.slack.com/types/group)
 type SlackGroup struct {
 	Id         string   `json:"id"`
 	Name       string   `json:"name"`
@@ -88,7 +88,7 @@ type SlackGroup struct {
 	Members    []string `json:"members"`
 }
 
-//! sucessor of SlackGroup (undocumented)
+// sucessor of SlackGroup (undocumented)
 type SlackSubteam struct {
 	Id        string `json:"id"`
 	ShortDesc string `json:"name"`   //!< Short description
@@ -105,16 +105,16 @@ type SlackUserGroupsListResponse struct {
 	UserGroups []SlackSubteam
 }
 
-//! multiparty IM
-//!
-//! @see https://api.slack.com/types/mpim
+// multiparty IM
+//
+// @see https://api.slack.com/types/mpim
 type SlackMpim struct {
 	Id      string
 	Name    string
 	Members []string
 }
 
-//! @see https://api.slack.com/types/im
+// @see https://api.slack.com/types/im
 type SlackIm struct {
 	Id     string `json:"id"`
 	UserId string `json:"user"`
@@ -167,7 +167,7 @@ var g_InfoMessageTypes = map[string]struct{}{
 // global variables
 //==============================
 
-//! maps user-id, channel-id, etc and name
+// maps user-id, channel-id, etc and name
 var g_IdNameMap map[string]string
 
 var g_LastUser = ""
@@ -269,7 +269,7 @@ func loadConfig(path string) error {
 	return nil
 }
 
-//! login to Slack and connect websocket
+// login to Slack and connect websocket
 func connect(token string) (*websocket.Conn, error) {
 	session, err := login(token)
 	if err != nil {
@@ -284,7 +284,7 @@ func connect(token string) (*websocket.Conn, error) {
 	return ws, nil
 }
 
-//! login to Slack
+// login to Slack
 func login(token string) (SlackSession, error) {
 	query := url.Values{}
 	query.Set("token", token)
@@ -362,7 +362,7 @@ func cacheUserGroups() error {
 	return nil
 }
 
-//! receiving loop
+// receiving loop
 func receiveRoutine(ws *websocket.Conn) error {
 	for {
 		// receive from ws, and map to string and interface{} from JSON
@@ -376,7 +376,13 @@ func receiveRoutine(ws *websocket.Conn) error {
 
 		// debug log
 		if _, exist := g_IgnoreMessageTypes[msg["type"].(string)]; !exist {
-			//log.Printf("type: %s, subtype: %s\n", msg["type"], msg["subtype"])
+			if _, exist := g_InfoMessageTypes[msg["type"].(string)]; !exist {
+				// full dump
+				//log.Printf("msg: %+v\n", msg)
+			} else {
+				// info
+				//log.Printf("type: %s, subtype: %s\n", msg["type"], msg["subtype"])
+			}
 		}
 
 		// dispatch from type
@@ -395,8 +401,8 @@ func receiveRoutine(ws *websocket.Conn) error {
 			onMessage(msg)
 		case "team_join":
 			onTeamJoin(msg)
-		case "user_change":
-			onUserChange(msg)
+		case "user_profile_changed":
+			onUserProfileChanged(msg)
 		}
 	}
 
@@ -413,18 +419,18 @@ func onBotAdded(msg map[string]interface{}) {
 	g_IdNameMap[id] = name
 }
 
-//==============================
+// ==============================
 // type: "channel_created"
-//==============================
+// ==============================
 func onChannelCreated(msg map[string]interface{}) {
 	id := msg["channel"].(map[string]interface{})["id"].(string)
 	name := msg["channel"].(map[string]interface{})["name"].(string)
 	g_IdNameMap[id] = name
 }
 
-//==============================
+// ==============================
 // type: "channel_joined"
-//==============================
+// ==============================
 func onChannelJoined(msg map[string]interface{}) {
 }
 
@@ -934,11 +940,17 @@ func onTeamJoin(msg map[string]interface{}) {
 }
 
 //==============================
-// type: "user_change"
+// type: "user_profile_changed"
 //==============================
 
-func onUserChange(msg map[string]interface{}) {
-	id := msg["user"].(map[string]interface{})["id"].(string)
-	name := msg["user"].(map[string]interface{})["name"].(string)
+func onUserProfileChanged(msg map[string]interface{}) {
+	user := msg["user"].(map[string]interface{})
+	id := user["id"].(string)
+	name := id
+	if dispName, exist := user["display_name"]; exist {
+		name = dispName.(string)
+	} else {
+		name = user["name"].(string)
+	}
 	g_IdNameMap[id] = name
 }
